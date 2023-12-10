@@ -93,27 +93,25 @@ impl Section {
         section.word_count = Some(word_count);
         section.reading_time = Some(reading_time);
 
-        let path = (|| {
-            let mut component_range_idx = 0;
+        let path = {
             let mut path_components: Vec<String> = Vec::new();
-            for file_component in section.file.components.clone() {
-                component_range_idx += 1;
-                let maybe_page_path = base_path
-                    .join("content")
-                    .join(section.file.components[0..component_range_idx].join("/"));
+            for (index, file_component) in section.file.components.iter().enumerate() {
+                let maybe_page_path =
+                    base_path.join("content").join(&section.file.components[0..=index].join("/"));
                 let maybe_page = Page::from_file(
                     maybe_page_path.join("index.md").as_path(),
                     &Config::default(),
                     base_path,
                 );
-                if maybe_page.is_ok() {
-                    path_components.push(maybe_page.unwrap().slug);
+                if let Ok(page) = maybe_page {
+                    path_components.push(page.slug);
                 } else {
-                    path_components.push(file_component);
+                    path_components.push(file_component.to_string());
                 }
             }
             path_components.join("/")
-        })();
+        };
+
         let lang_path = if section.lang != config.default_language {
             format!("/{}", section.lang)
         } else {
