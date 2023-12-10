@@ -237,12 +237,14 @@ impl Section {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::{create_dir, create_dir_all, File};
+    use std::fs::{self, create_dir, create_dir_all, File};
     use std::io::Write;
     use std::path::{Path, PathBuf};
 
     use libs::globset::{Glob, GlobSetBuilder};
     use tempfile::tempdir;
+
+    use crate::Page;
 
     use super::Section;
     use config::{Config, LanguageOptions};
@@ -324,6 +326,42 @@ Bonjour le monde"#
         let section = res.unwrap();
         assert_eq!(section.lang, "fr".to_string());
         assert_eq!(section.permalink, "http://a-website.com/fr/hello/nested/");
+    }
+
+    #[test]
+    fn can_respect_parent_path_of_a_page() {
+        // Create a base directory with `/content/posts` subdirectories
+        let base_dir = tempdir().expect("create temp dir");
+        let base_dir_path = base_dir.path();
+        create_dir(&base_dir_path.join("content")).expect("create content temp dir");
+        create_dir(&base_dir_path.join("content").join("posts")).expect("create posts temp dir");
+
+        // Create a 'post' (page) about my vacation, within a directory that has a date as a name
+        let my_post_path =
+            base_dir_path.join("content").join("posts").join("2013-06-02_my-vacation");
+        create_dir(&my_post_path).expect("create dir for post (page) about my vacation");
+        let mut my_post_file = File::create(my_post_path.join("index.md")).unwrap();
+        my_post_file.write_all(b"+++\n\n+++\n").unwrap();
+        let my_post_page = Page::from_file(
+            my_post_path.join("index.md").as_path(),
+            &Config::default(),
+            base_dir_path,
+        );
+        assert!(my_post_page.is_ok());
+        let my_post_page = my_post_page.unwrap(); // shadow the variable after confirming ok
+
+        // Create a subdirectory named 'comments' (section) within the post about my vacation
+        let comments_path = my_post_path.join("comments");
+        fs::create_dir(&comments_path).unwrap();
+        let mut comments_section_file = File::create(comments_path.join("_index.md")).unwrap();
+        comments_section_file.write_all(b"+++\n\n+++\n").unwrap();
+        let comments_section =
+            Section::from_file(comments_path.join("_index.md"), &Config::default(), base_dir_path);
+        assert!(comments_section.is_ok());
+        let comments_section = comments_section.unwrap(); // shadow the variable after confirming ok
+
+        // Check that that section URL path was created successfully
+        assert_eq!(comments_section.permalink, "http://a-website.com/posts/my-vacation/comments");
     }
 
     // https://zola.discourse.group/t/rfc-i18n/13/17?u=keats
