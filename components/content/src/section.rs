@@ -16,6 +16,7 @@ use crate::front_matter::{split_section_content, SectionFrontMatter};
 use crate::library::Library;
 use crate::ser::{SectionSerMode, SerializingSection};
 use crate::utils::{find_related_assets, get_reading_analytics, has_anchor};
+use crate::Page;
 
 // Default is used to create a default index section if there is no _index.md in the root content directory
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -91,7 +92,27 @@ impl Section {
         section.word_count = Some(word_count);
         section.reading_time = Some(reading_time);
 
-        let path = section.file.components.join("/");
+        let path = (|| {
+            let mut component_range_idx = 0;
+            let mut path_components: Vec<String> = Vec::new();
+            for file_component in section.file.components.clone() {
+                component_range_idx += 1;
+                let maybe_page_path = base_path
+                    .join("content")
+                    .join(section.file.components[0..component_range_idx].join("/"));
+                let maybe_page = Page::from_file(
+                    maybe_page_path.join("index.md").as_path(),
+                    &Config::default(),
+                    base_path,
+                );
+                if maybe_page.is_ok() {
+                    path_components.push(maybe_page.unwrap().slug);
+                } else {
+                    path_components.push(file_component);
+                }
+            }
+            path_components.join("/")
+        })();
         let lang_path = if section.lang != config.default_language {
             format!("/{}", section.lang)
         } else {
@@ -361,7 +382,7 @@ Bonjour le monde"#
         let comments_section = comments_section.unwrap(); // shadow the variable after confirming ok
 
         // Check that that section URL path was created successfully
-        assert_eq!(comments_section.permalink, "http://a-website.com/posts/my-vacation/comments");
+        assert_eq!(comments_section.permalink, "http://a-website.com/posts/my-vacation/comments/");
     }
 
     // https://zola.discourse.group/t/rfc-i18n/13/17?u=keats
